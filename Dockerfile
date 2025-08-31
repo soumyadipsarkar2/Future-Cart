@@ -1,0 +1,65 @@
+# Use Python 3.9 slim image as base
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    wget \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY src/ ./src/
+COPY notebooks/ ./notebooks/
+COPY data/ ./data/
+COPY README.md .
+
+# Create necessary directories
+RUN mkdir -p models logs
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose ports for API and dashboard
+EXPOSE 8000 8501
+
+# Create startup script
+RUN echo '#!/bin/bash\n\
+echo "Starting Customer Purchase Prediction Services..."\n\
+\n\
+# Start API server in background\n\
+echo "Starting FastAPI server..."\n\
+cd /app/src/api\n\
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload &\n\
+\n\
+# Wait a moment for API to start\n\
+sleep 5\n\
+\n\
+# Start Streamlit dashboard\n\
+echo "Starting Streamlit dashboard..."\n\
+cd /app/src/dashboard\n\
+streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command
+CMD ["/app/start.sh"]

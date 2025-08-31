@@ -1,0 +1,45 @@
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.0
+openpyxl>=3.1.2
+xlrd>=2.0.1
+
+# Machine Learning
+scikit-learn>=1.4.0
+xgboost>=2.0.3
+imbalanced-learn>=0.11.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.17.0
+
+# Explainability
+shap>=0.44.0
+
+# API and Dashboard
+fastapi>=0.104.1
+uvicorn>=0.24.0
+streamlit>=1.28.1
+pydantic>=2.5.0
+
+# Experiment Tracking
+mlflow>=2.8.1
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+tqdm>=4.66.1
+
+# Testing
+pytest>=7.4.3
+pytest-cov>=4.1.0
+
+# Development
+jupyter>=1.0.0
+ipykernel>=6.27.1
+black>=23.11.0
+flake8>=6.1.0
+
+# Deployment
+docker>=6.1.3
