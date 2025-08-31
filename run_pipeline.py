@@ -34,16 +34,7 @@ def run_data_preprocessing():
     # Initialize data loader
     data_loader = DataLoader()
     
-    try:
-        # Load data
-        raw_data = data_loader.load_data()
-        logger.info(f"Loaded {len(raw_data)} rows of data")
-    except FileNotFoundError:
-        logger.warning("Online Retail.csv not found. Using sample data.")
-        raw_data = load_sample_data()
-        logger.info(f"Using sample data with {len(raw_data)} rows")
-    
-    # Preprocess data
+    # Load and preprocess data
     preprocessed_data = data_loader.basic_preprocessing()
     logger.info(f"Preprocessed data: {len(preprocessed_data)} rows")
     

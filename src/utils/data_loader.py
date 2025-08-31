@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class DataLoader:
     """Data loader for Online Retail dataset."""
     
-    def __init__(self, data_path: str = "data/Online Retail.csv"):
+    def __init__(self, data_path: str = "data/raw/Online Retail.csv"):
         """
         Initialize DataLoader.
         
@@ -60,7 +60,11 @@ class DataLoader:
             Preprocessed DataFrame
         """
         if self.data is None:
-            self.load_data()
+            try:
+                self.load_data()
+            except FileNotFoundError:
+                logger.warning("Data file not found, using sample data")
+                self.data = load_sample_data()
             
         df = self.data.copy()
         

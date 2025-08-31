@@ -105,13 +105,28 @@ def load_model(model_path: str = "../../models/random_forest_model.pkl"):
     
     try:
         if os.path.exists(model_path):
-            model_data = joblib.load(model_path)
+            # Load our custom model format
+            import pickle
+            with open(model_path, 'rb') as f:
+                model_data = pickle.load(f)
+            
             model = model_data['model']
-            feature_names = model_data['feature_names']
+            # For our models, we need to get feature names from the data
+            # We'll use a default set based on our feature engineering
+            feature_names = [
+                'recency_days', 'frequency', 'monetary', 'total_monetary',
+                'total_transactions', 'unique_invoices', 'unique_products',
+                'unique_descriptions', 'avg_basket_size', 'avg_basket_value',
+                'spend_30d', 'spend_90d', 'spend_ratio_30d_90d', 'spend_ratio_90d_180d',
+                'freq_30d', 'freq_90d', 'transactions_30d', 'transactions_90d',
+                'total_returns', 'return_rate', 'return_amount', 'net_amount',
+                'avg_day_of_week', 'std_day_of_week', 'avg_month', 'std_month',
+                'weekend_ratio', 'customer_lifetime_days', 'primary_country'
+            ]
             model_info = {
-                'model_name': model_data.get('model_name', 'RandomForest'),
-                'training_date': model_data.get('training_date', 'Unknown'),
-                'version': model_data.get('version', '1.0.0')
+                'model_name': model_data.get('name', 'RandomForest'),
+                'training_date': datetime.now().isoformat(),
+                'version': '1.0.0'
             }
             logger.info(f"Model loaded successfully: {model_info}")
         else:
