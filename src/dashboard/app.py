@@ -16,13 +16,43 @@ import io
 import sys
 import os
 from pathlib import Path
+import pickle
 
 # Add src to path for imports
 project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-# API configuration
+# Load models directly in the dashboard
+def load_models():
+    """Load ML models directly in the dashboard."""
+    models = {}
+    model_files = {
+        'random_forest': 'models/random_forest_model.pkl',
+        'xgboost': 'models/xgboost_model.pkl',
+        'logistic_regression': 'models/logistic_regression_model.pkl',
+        'stacking_ensemble': 'models/stacking_ensemble.pkl',
+        'blending_ensemble': 'models/blending_ensemble.pkl'
+    }
+    
+    for name, path in model_files.items():
+        if os.path.exists(path):
+            try:
+                with open(path, 'rb') as f:
+                    models[name] = pickle.load(f)
+            except Exception as e:
+                st.error(f"Error loading {name} model: {e}")
+    
+    return models
+
+# Load models on startup
+@st.cache_resource
+def get_models():
+    return load_models()
+
+models = get_models()
+
+# API configuration (for optional API calls)
 API_BASE_URL = "http://localhost:8001"
 
 def check_api_health():
@@ -58,20 +88,48 @@ def convert_numpy_types(obj):
     else:
         return obj
 
+def score_customer_direct(features):
+    """Score a customer directly using loaded models."""
+    try:
+        if 'random_forest' not in models:
+            return None
+        
+        model_data = models['random_forest']
+        model = model_data['model']
+        
+        # Create feature vector (simplified for demo)
+        feature_vector = np.array([
+            features.get('recency_days', 30),
+            features.get('frequency', 5),
+            features.get('monetary', 100.0),
+            features.get('unique_products', 10),
+            features.get('return_rate', 0.1)
+        ]).reshape(1, -1)
+        
+        # Make prediction
+        probability = model.predict_proba(feature_vector)[0, 1]
+        
+        return {
+            'purchase_probability': float(probability),
+            'recommendation': 'high_priority' if probability > 0.7 else 'medium_priority' if probability > 0.4 else 'low_priority'
+        }
+    except Exception as e:
+        st.error(f"Error scoring customer: {e}")
+        return None
+
 def score_batch_customers(customers_data):
     """Score multiple customers in batch."""
     try:
-        # Convert numpy types to native Python types
-        serializable_data = convert_numpy_types(customers_data)
-        
-        response = requests.post(
-            f"{API_BASE_URL}/score_batch",
-            json=serializable_data,
-            timeout=30
-        )
-        if response.status_code == 200:
-            return response.json()
-        return None
+        # Use direct model scoring instead of API
+        results = []
+        for customer in customers_data:
+            result = score_customer_direct(customer.get('features', {}))
+            if result:
+                results.append({
+                    'customer_id': customer.get('customer_id'),
+                    **result
+                })
+        return results
     except Exception as e:
         st.error(f"Error scoring customers: {e}")
         return None
