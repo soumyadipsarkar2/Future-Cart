@@ -60,39 +60,87 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
     
-    - name: Deploy to AWS App Runner
-      uses: aws-actions/amazon-app-runner-deploy@v1
-      with:
-        service: customer-purchase-prediction
-        image: ${{ steps.login-ecr.outputs.registry }}/customer-purchase-prediction:latest
-        access-role-arn: ${{ secrets.APPRUNNER_SERVICE_ROLE_ARN }}
-        region: us-east-1
-        cpu: 1
-        memory: 2048
-        port: 8000
-        wait-for-service-stability: true
+    - name: Create App Runner service
+      id: create-service
+      run: |
+        # Check if service exists
+        SERVICE_ARN=$(aws apprunner list-services --region us-east-1 --query "ServiceSummaryList[?ServiceName=='customer-purchase-prediction'].ServiceArn" --output text)
+        
+        if [ -z "$SERVICE_ARN" ]; then
+          echo "Creating new App Runner service..."
+          SERVICE_ARN=$(aws apprunner create-service \
+            --service-name customer-purchase-prediction \
+            --source-configuration '{
+              "AuthenticationConfiguration": {
+                "AccessRoleArn": "'${{ secrets.APPRUNNER_SERVICE_ROLE_ARN }}'"
+              },
+              "ImageRepository": {
+                "ImageIdentifier": "'${{ steps.login-ecr.outputs.registry }}/customer-purchase-prediction:latest'",
+                "ImageRepositoryType": "ECR",
+                "ImageConfiguration": {
+                  "Port": "8000"
+                }
+              }
+            }' \
+            --instance-configuration '{
+              "Cpu": "1 vCPU",
+              "Memory": "2 GB"
+            }' \
+            --region us-east-1 \
+            --query 'Service.ServiceArn' \
+            --output text)
+        else
+          echo "Service already exists, updating..."
+        fi
+        
+        echo "service_arn=$SERVICE_ARN" >> $GITHUB_OUTPUT
+    
+    - name: Update App Runner service
+      run: |
+        aws apprunner start-deployment \
+          --service-arn ${{ steps.create-service.outputs.service_arn }} \
+          --region us-east-1
+        
+        echo "Deployment started. Waiting for completion..."
+        
+        # Wait for deployment to complete
+        aws apprunner wait service-running \
+          --service-arn ${{ steps.create-service.outputs.service_arn }} \
+          --region us-east-1
     
     - name: Get App Runner URL
       id: get-url
       run: |
-        SERVICE_URL=$(aws apprunner describe-service --service-arn ${{ steps.deploy.outputs.service-arn }} --region us-east-1 --query 'Service.ServiceUrl' --output text)
+        SERVICE_URL=$(aws apprunner describe-service \
+          --service-arn ${{ steps.create-service.outputs.service_arn }} \
+          --region us-east-1 \
+          --query 'Service.ServiceUrl' \
+          --output text)
         echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+        echo "Service URL: $SERVICE_URL"
     
     - name: Comment deployment URL
       uses: actions/github-script@v7
       with:
         script: |
+          const url = '${{ steps.get-url.outputs.url }}';
+          const commitSha = '${{ github.sha }}';
+          
+          const comment = `🚀 **Deployment Complete!**
+          
+          🌐 **Your application is live at:** https://${url}
+          
+          📚 **API Documentation:** https://${url}/docs
+          
+          ❤️ **Health Check:** https://${url}/health
+          
+          This deployment was triggered by commit: \`${commitSha}\`
+          
+          **Share this URL with others:** https://${url}`;
+          
           github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `🚀 **Deployment Complete!**
-          
-          🌐 **Your application is live at:** https://${{ steps.get-url.outputs.url }}
-          
-          📚 **API Documentation:** https://${{ steps.get-url.outputs.url }}/docs
-          
-          ❤️ **Health Check:** https://${{ steps.get-url.outputs.url }}/health
-          
-          This deployment was triggered by commit: \`${{ github.sha }}\``
-          })
+            body: comment
+          });
