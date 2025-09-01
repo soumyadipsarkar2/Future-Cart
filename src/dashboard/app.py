@@ -419,10 +419,12 @@ def main():
     st.markdown("Upload your transaction data to get comprehensive customer insights and predictions")
     st.markdown("---")
     
-    # Check API health
-    api_healthy = check_api_health()
-    if not api_healthy:
-        st.warning("⚠️ API is not running. Using simulated predictions for demonstration.")
+    # Check if models are loaded
+    models_loaded = len(models) > 0
+    if models_loaded:
+        st.success(f"✅ ML Models loaded successfully: {', '.join(models.keys())}")
+    else:
+        st.warning("⚠️ Models not loaded. Using simulated predictions for demonstration.")
     
     # File upload section
     st.header("📁 Upload Your Transaction Data")
@@ -744,11 +746,11 @@ def main():
         - Country: Country of transaction
         """)
         
-        # Show API status
-        if api_healthy:
-            st.success("✅ API is running and ready for predictions")
+        # Show model status
+        if models_loaded:
+            st.success(f"✅ ML Models loaded and ready for predictions: {', '.join(models.keys())}")
         else:
-            st.warning("⚠️ API is not running. Will use simulated predictions.")
+            st.warning("⚠️ Models not loaded. Will use simulated predictions.")
 
 if __name__ == "__main__":
     main()
