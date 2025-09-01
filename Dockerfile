@@ -23,14 +23,13 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
+# Copy source code and models
 COPY src/ ./src/
-COPY notebooks/ ./notebooks/
-COPY data/ ./data/
+COPY models/ ./models/
 COPY README.md .
 
 # Create necessary directories
-RUN mkdir -p models logs
+RUN mkdir -p logs
 
 # Create a non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

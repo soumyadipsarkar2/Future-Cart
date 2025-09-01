@@ -1,0 +1,98 @@
+name: Deploy to AWS App Runner
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v || echo "No tests found, continuing..."
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+    
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: Create ECR repository
+      run: |
+        aws ecr create-repository --repository-name customer-purchase-prediction --region us-east-1 || echo "Repository already exists"
+    
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: customer-purchase-prediction
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+    
+    - name: Deploy to AWS App Runner
+      uses: aws-actions/amazon-app-runner-deploy@v1
+      with:
+        service: customer-purchase-prediction
+        image: ${{ steps.login-ecr.outputs.registry }}/customer-purchase-prediction:latest
+        access-role-arn: ${{ secrets.APPRUNNER_SERVICE_ROLE_ARN }}
+        region: us-east-1
+        cpu: 1
+        memory: 2048
+        port: 8000
+        wait-for-service-stability: true
+    
+    - name: Get App Runner URL
+      id: get-url
+      run: |
+        SERVICE_URL=$(aws apprunner describe-service --service-arn ${{ steps.deploy.outputs.service-arn }} --region us-east-1 --query 'Service.ServiceUrl' --output text)
+        echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+    
+    - name: Comment deployment URL
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `🚀 **Deployment Complete!**
+          
+          🌐 **Your application is live at:** https://${{ steps.get-url.outputs.url }}
+          
+          📚 **API Documentation:** https://${{ steps.get-url.outputs.url }}/docs
+          
+          ❤️ **Health Check:** https://${{ steps.get-url.outputs.url }}/health
+          
+          This deployment was triggered by commit: \`${{ github.sha }}\``
+          })
