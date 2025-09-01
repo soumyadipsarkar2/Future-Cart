@@ -3,5 +3,4 @@ services:
     name: future-cart-dashboard
     env: docker
     plan: free
-    dockerfilePath: ./Dockerfile.streamlit
     healthCheckPath: /_stcore/health
